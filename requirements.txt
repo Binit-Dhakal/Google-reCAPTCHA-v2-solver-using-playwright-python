@@ -1,0 +1,4 @@
+playwright==1.17.0
+playwright_stealth==1.0.5
+pydub==0.22.1
+SpeechRecognition==3.8.1
