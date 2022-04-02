@@ -126,5 +126,4 @@ if __name__ == "__main__":
             del captcha_solver
         except Exception as e:
             print(e)
-        context.close()
         browser.close()
