@@ -1,20 +1,21 @@
-#for playwright
+# for playwright
 from playwright.sync_api import sync_playwright, TimeoutError
 from playwright_stealth import stealth_sync
 import datetime
 import json
 
-#for recaptcha
+# for recaptcha
 import urllib
 import pydub
-from speech_recognition import Recognizer,AudioFile
+from speech_recognition import Recognizer, AudioFile
 import random
 import os
 
 configs = {
-    'CHROME_BUNDLE':'/home/binit/driver/chrome-linux/chrome',
-    'HEADLESS':'false',
+    'CHROME_BUNDLE': '/home/binit/driver/chrome-linux/chrome',
+    'HEADLESS': 'false',
 }
+
 
 def browsersetup(p):
     headless = True if configs["HEADLESS"] == "true" else False
@@ -29,35 +30,39 @@ def browsersetup(p):
         '--no-service-autorun',
         '--password-store=basic',
         '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36',
-        '--window-size=900,1200',
+        '--window-size=640,480',
         '--disable-audio-output'
     ]
-    browser = p.chromium.launch(headless=headless, executable_path=configs["CHROME_BUNDLE"], args=args)
-    
+    browser = p.chromium.launch(
+        headless=headless, executable_path=configs["CHROME_BUNDLE"], args=args)
+
     return browser
 
+
 class SolveCaptcha:
-    def __init__(self,page):
+    def __init__(self, page):
         self.page = page
         self.main_frame = None
-        self.recaptcha = None 
-        
+        self.recaptcha = None
+
     def delay(self):
-        self.page.wait_for_timeout(random.randint(1,3)*1000)
-    
+        self.page.wait_for_timeout(random.randint(1, 3) * 1000)
+
     def presetup(self):
-        name = self.page.locator("//iframe[@title='reCAPTCHA']").get_attribute("name")
-        self.recaptcha = self.page.frame(name = name)
+        name = self.page.locator(
+            "//iframe[@title='reCAPTCHA']").get_attribute("name")
+        self.recaptcha = self.page.frame(name=name)
 
         self.recaptcha.click("//div[@class='recaptcha-checkbox-border']")
         self.delay()
         s = self.recaptcha.locator("//span[@id='recaptcha-anchor']")
-        if s.get_attribute("aria-checked") != "false": #solved already
+        if s.get_attribute("aria-checked") != "false":  # solved already
             return
-        
-        self.main_frame = self.page.frame(name = page.locator("//iframe[@title='recaptcha challenge expires in two minutes']").get_attribute("name"))
+
+        self.main_frame = self.page.frame(name=page.locator(
+            "//iframe[contains(@src,'https://www.google.com/recaptcha/api2/bframe?')]").get_attribute("name"))
         self.main_frame.click("id=recaptcha-audio-button")
-    
+
     def start(self):
         self.presetup()
         tries = 0
@@ -75,15 +80,17 @@ class SolveCaptcha:
                     self.delay()
                     break
             tries += 1
-            
+
     def solve_captcha(self):
-        self.main_frame.click("//button[@aria-labelledby='audio-instructions rc-response-label']")
-        href = self.main_frame.locator("//a[@class='rc-audiochallenge-tdownload-link']").get_attribute("href")
+        self.main_frame.click(
+            "//button[@aria-labelledby='audio-instructions rc-response-label']")
+        href = self.main_frame.locator(
+            "//a[@class='rc-audiochallenge-tdownload-link']").get_attribute("href")
 
-        urllib.request.urlretrieve(href,"audio.mp3")
+        urllib.request.urlretrieve(href, "audio.mp3")
 
-        sound = pydub.AudioSegment.from_mp3("audio.mp3").export("audio.wav",format="wav")
-
+        sound = pydub.AudioSegment.from_mp3(
+            "audio.mp3").export("audio.wav", format="wav")
 
         recognizer = Recognizer()
 
@@ -92,21 +99,26 @@ class SolveCaptcha:
             audio = recognizer.record(source)
 
         text = recognizer.recognize_google(audio)
-
-        self.main_frame.fill("id=audio-response",text)
+        print(text)
+        self.main_frame.fill("id=audio-response", text)
         self.main_frame.click("id=recaptcha-verify-button")
         self.delay()
-    
+
     def __del__(self):
         os.remove("audio.mp3")
         os.remove("audio.wav")
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     with sync_playwright() as p:
         browser = browsersetup(p)
-        page = browser.new_page()
+        context = browser.new_context(
+            record_video_dir="videos/",
+            record_video_size={"width": 640, "height": 480}
+        )
+        page = context.new_page()
         stealth_sync(page)
-        
+
         try:
             page.goto("https://www.google.com/recaptcha/api2/demo")
             captcha_solver = SolveCaptcha(page)
@@ -114,4 +126,5 @@ if __name__=="__main__":
             del captcha_solver
         except Exception as e:
             print(e)
+        context.close()
         browser.close()
